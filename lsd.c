@@ -2140,7 +2140,7 @@ double * LineSegmentDetection( int * n_out,
                 rects_a = 32;
             }
             rects_a *= 2;
-            rects = realloc(rects, rect_u * sizeof(rects[0]));
+            rects = realloc(rects, rects_a * sizeof(rects[0]));
         }
         rects[rects_u++] = rec;
         
@@ -2272,14 +2272,13 @@ double rect_distance(struct rect *a, struct rect *b)
 
 static void g_region_grow( struct rect *init_point, image_double angles, struct point * reg,
                          int * reg_size, double * reg_angle, image_char used,
-                         struct rect *points, int n, double prec, double dist_threshold )
+                         struct rect *points, int n, double prec, double dist_threshold,
+                         double length_threshold )
 {
   double sumdx,sumdy;
   int i, j;
 
   /* check parameters */
-  if( x < 0 || y < 0 || x >= (int) angles->xsize || y >= (int) angles->ysize )
-    error("region_grow: (x,y) out of the image.");
   if( angles == NULL || angles->data == NULL )
     error("region_grow: invalid image 'angles'.");
   if( reg == NULL ) error("region_grow: invalid 'reg'.");
@@ -2292,24 +2291,24 @@ static void g_region_grow( struct rect *init_point, image_double angles, struct 
   *reg_size = 2;
   reg[0].x = init_point->x1;
   reg[0].y = init_point->y1;
-  *reg_angle = angles->data[init_point->x1 + init_point->y1 * angles->xsize];  /* region's angle */
+  *reg_angle = angles->data[(int) (init_point->x1 + init_point->y1 * angles->xsize)];  /* region's angle */
   sumdx = cos(*reg_angle);
   sumdy = sin(*reg_angle);
-  used->data[init_point->x1 + init_point->y1*used->xsize] = USED;
+  used->data[(int) (init_point->x1 + init_point->y1*used->xsize)] = USED;
   reg[1].x = init_point->x2;
   reg[1].y = init_point->y2;
-  used->data[init_point->x2 + init_point->y2*used->xsize] = USED;
+  used->data[(int) (init_point->x2 + init_point->y2*used->xsize)] = USED;
   
   /* try neighbors as new region points */
   for(i=0; i<*reg_size; i++)
     for(j = 0; j < n; j++) {
-      if (used->data[points[j].x1 + points[j].y1 * used->xsize] != USED &&
+      if (used->data[(int) (points[j].x1 + points[j].y1 * used->xsize)] != USED &&
         points[j].length >= length_threshold &&
         rect_distance(init_point, &points[j]) <= dist_threshold &&
-        isaligned(used->data[points[j].x1, points[j].y1, angles, *reg_angle, prec)) {
+        isaligned(points[j].x1, points[j].y1, angles, *reg_angle, prec)) {
             /* add two points */
-            used->data[points[j].x1+points[j].y1*used->xsize] = USED;
-            used->data[points[j].x2+points[j].y2*used->xsize] = USED;
+            used->data[(int) (points[j].x1+points[j].y1*used->xsize)] = USED;
+            used->data[(int) (points[j].x2+points[j].y2*used->xsize)] = USED;
             reg[*reg_size].x = points[j].x1;
             reg[*reg_size].y = points[j].y1;
             ++(*reg_size);
@@ -2318,10 +2317,10 @@ static void g_region_grow( struct rect *init_point, image_double angles, struct 
             ++(*reg_size);
 
             /* update region's angle */
-            sumdx += cos( angles->data[points[j].x1+points[j].y1*angles->xsize] );
-            sumdy += sin( angles->data[points[j].x1+points[j].y1*angles->xsize] );
-            sumdx += cos( angles->data[points[j].x2+points[j].y2*angles->xsize] );
-            sumdy += sin( angles->data[points[j].x2+points[j].y2*angles->xsize] );
+            sumdx += cos( angles->data[(int) (points[j].x1 + points[j].y1 * angles->xsize)] );
+            sumdy += sin( angles->data[(int) (points[j].x1+points[j].y1*angles->xsize)] );
+            sumdx += cos( angles->data[(int) (points[j].x2+points[j].y2*angles->xsize)] );
+            sumdy += sin( angles->data[(int) (points[j].x2+points[j].y2*angles->xsize)] );
             *reg_angle = atan2(sumdy,sumdx);
             
             
@@ -2335,7 +2334,7 @@ static void g_region_grow( struct rect *init_point, image_double angles, struct 
 
 
 
-int comp_rect_len(void *a, void *b)
+int comp_rect_len(const void *a, const void *b)
 {
     struct rect *r1 = (struct rect *)a;
     struct rect *r2 = (struct rect *)b;
@@ -2345,31 +2344,19 @@ int comp_rect_len(void *a, void *b)
 
 static image_double segments_to_points(struct rect *points, int size,
                               image_double in, double length_threshold,
-                              struct coorlist ** list_p,
                               image_double * modgrad)
 {
-  qsort(rects, n, sizeof(rects[0]), comp_rect_len);
+  qsort(points, size, sizeof(points[0]), comp_rect_len);
   
   image_double g;
   unsigned int n,p,x,y,adr,i;
-  double com1,com2,gx,gy,norm,norm2;
   /* the rest of the variables are used for pseudo-ordering
      the gradient magnitude values */
-  int list_count = 0;
-  struct coorlist * list;
-  struct coorlist ** range_l_s; /* array of pointers to start of bin list */
-  struct coorlist ** range_l_e; /* array of pointers to end of bin list */
-  struct coorlist * start;
-  struct coorlist * end;
-  double max_grad = 0.0;
 
   /* check parameters */
   if( in == NULL || in->data == NULL || in->xsize == 0 || in->ysize == 0 )
     error("ll_angle: invalid image.");
-  if( threshold < 0.0 ) error("ll_angle: 'threshold' must be positive.");
-  if( list_p == NULL ) error("ll_angle: NULL pointer 'list_p'.");
   if( modgrad == NULL ) error("ll_angle: NULL pointer 'modgrad'.");
-  if( n_bins == 0 ) error("ll_angle: 'n_bins' must be positive.");
 
   /* image size shortcuts */
   n = in->ysize;
@@ -2381,10 +2368,6 @@ static image_double segments_to_points(struct rect *points, int size,
   /* get memory for the image of gradient modulus */
   *modgrad = new_image_double(in->xsize,in->ysize);
 
-  /* get memory for "ordered" list of pixels */
-  list = (struct coorlist *) calloc( (size_t) (n*p), sizeof(struct coorlist) );
-  if( list == NULL)
-    error("not enough memory.");
   
   
   /* 'undefined' by default */
@@ -2405,17 +2388,8 @@ static image_double segments_to_points(struct rect *points, int size,
       {
         g->data[adr] = points[i].theta;
       }
-    if( end == NULL ) {
-        start = end = &list[list_count++];
-    } else {
-        end->next = &list[list_count++];
-        end = end->next;
-    }
-    end->x = points[i].x1;
-    end->y = points[i].y1;
-    end->next = NULL;
     
-    points[i].y2*p+points[i].x2;
+    adr = points[i].y2*p+points[i].x2;
     (*modgrad)->data[adr] = points[i].length;
     if( points[i].length <= length_threshold )
       g->data[adr] = NOTDEF; /* gradient angle not defined */
@@ -2423,14 +2397,8 @@ static image_double segments_to_points(struct rect *points, int size,
       {
         g->data[adr] = points[i].theta;
       }
-    end->next = &list[list_count++];
-    end = end->next;
-    end->x = points[i].x2;
-    end->y = points[i].y2;
-    end->next = NULL;
   }
 
-  *list_p = start;
 
   return g;
 }
@@ -2445,15 +2413,15 @@ double * line_segment_grower(int * n_out,
                                ntuple_list out,  unsigned int xsize,
                                unsigned int ysize, image_int region,
                                struct rect *points, int size,
-                               image_double image)
+                               image_double image, double length_threshold,
+                               double dist_threshold )
 {
   double * return_value;
-  image_double scaled_image,angles,modgrad;
+  image_double angles,modgrad;
   image_char used;
-  struct coorlist * list_p;
   struct rect rec;
   struct point * reg;
-  int reg_size,min_reg_size,i;
+  int reg_size,min_reg_size, i, j;
   double rho,reg_angle,prec,p,log_nfa,logNT;
   int ls_count = 0;                   /* line segments are numbered 1,2,3,... */
   
@@ -2465,9 +2433,8 @@ double * line_segment_grower(int * n_out,
   p = ang_th / 180.0;
   rho = quant / sin(prec); /* gradient magnitude threshold */
   
-  angles = segments_to_points(points, size, image, length_threshold, &list_p, ,&modgrad);
+  angles = segments_to_points(points, size, image, length_threshold, &modgrad);
   
-// FIXME: repair all this parametrs!
 
   /* Number of Tests - NT
 
@@ -2495,16 +2462,16 @@ double * line_segment_grower(int * n_out,
 
 
   /* search for line segments */
-  for(; list_p != NULL; list_p = list_p->next )
-    if( used->data[ list_p->x + list_p->y * used->xsize ] == NOTUSED &&
-        angles->data[ list_p->x + list_p->y * angles->xsize ] != NOTDEF )
+  for(j = 0; j < size; j++)
+    if( used->data[(int) (points[j].x1 + points[j].y1 * used->xsize)] == NOTUSED &&
+        angles->data[(int) (points[j].x1 + points[j].y1 * angles->xsize)] != NOTDEF )
        /* there is no risk of double comparison problems here
           because we are only interested in the exact NOTDEF value */
       {
         /* find the region of connected point and ~equal angle */
-        g_region_grow(init_point, angles, reg, &reg_size,
+        g_region_grow(&points[j], angles, reg, &reg_size,
                      &reg_angle, used, points, size,
-                     prec, dist_threshold );
+                     prec, dist_threshold, length_threshold );
 
         /* reject small regions */
         if( reg_size < min_reg_size ) continue;
