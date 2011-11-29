@@ -53,6 +53,16 @@
 #opt: svgfile | S | str | | | | Output line segments into SVG file 'svgfile'.  \
 #opt: width | W | double | 1.5 | | |                                           \
       LS width used in EPS and SVG files. If <=0, use detected values.         \
+#opt: need_to_union | U | int | 0 | 0 | 1 |                                    \
+      Do you need to post procces image by union close segments                \
+#opt: union_ang_th | A | double | 22.5 | 0.0 | 180.0 |                         \
+      Union angle tolerance in degrees.                                        \
+#opt: union_log_eps | E | double | 0.0 | | |                                   \
+      Union detection threshold                                                \
+#opt: length_threshold | L | double | 10 | 0.0 | |                             \
+      Minimum length of segment to union                                       \
+#opt: dist_threshold | D | double | 10 | 0.0 | |                               \
+      Maximum distance between two line which we would union                   \
 #req: in  | | str | | | | Input image (PGM)                                    \
 #req: out | | str | | | |                                                      \
       Line Segment output (each ascii line: x1,y1,x2,y2,width,p,-log10(NFA) )  \

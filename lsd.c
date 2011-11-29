@@ -2527,11 +2527,12 @@ double * lsd_scale_region( int * n_out,
   int n_bins = 1024;        /* Number of bins in pseudo-ordering of gradient
                                modulus.                                       */
   
+  // FIXME: get good initial parametrs
   int need_to_union = 0;    /* Bool if you need to post procces image by 
                                union close segments                           */
   double union_ang_th = 22.5;
   double union_log_eps = 0.0;
-  double length_threshold = 10; /* Minimum length of the segment to union     */
+  double length_threshold = 10; /* Minimum length of segment to union     */
   double dist_threshold = 10;   /* Maximum distance between two line which 
                                    we would union                             */
 
