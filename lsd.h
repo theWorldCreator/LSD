@@ -131,8 +131,10 @@ double * LineSegmentDetection( int * n_out,
                                double * img, int X, int Y,
                                double scale, double sigma_scale, double quant,
                                double ang_th, double log_eps, double density_th,
-                               int n_bins,
-                               int ** reg_img, int * reg_x, int * reg_y );
+                               double union_ang_th, double union_log_eps,
+                               int n_bins, int need_to_union,
+                               int ** reg_img, int * reg_x, int * reg_y,
+                               double length_threshold, double dist_threshold );
 
 /*----------------------------------------------------------------------------*/
 /** LSD Simple Interface with Scale and Region output.
