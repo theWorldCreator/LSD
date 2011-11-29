@@ -1079,9 +1079,14 @@ int main(int argc, char ** argv)
                                get_double(arg,"ang_th"),
                                get_double(arg,"log_eps"),
                                get_double(arg,"density_th"),
+                               get_double(arg,"union_ang_th"),
+                               get_double(arg,"union_log_eps"),
                                get_int(arg,"n_bins"),
+                               get_int(arg,"need_to_union"),
                                is_assigned(arg,"reg") ? &region : NULL,
-                               &regX, &regY );
+                               &regX, &regY, 
+                               get_double(arg,"length_threshold"),
+                               get_double(arg,"dist_threshold"));
 
   /* output */
   if( strcmp(get_str(arg,"out"),"-") == 0 ) output = stdout;
