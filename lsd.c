@@ -2247,20 +2247,14 @@ void line_segment_grower(double * img, int X, int Y,
         
 
         /* compute NFA value */
-        log_nfa = rect_improve(&rec,angles,logNT,log_eps);
+        //log_nfa = rect_improve(&rec,angles,logNT,log_eps);
         //printf("nfa: %lf %lf\n", log_nfa, log_eps);
         //if( log_nfa <= log_eps ) continue;
 
         /* A New Line Segment was found! */
         ++ls_count;  /* increase line segment counter */
 
-        /*
-           The gradient was computed with a 2x2 mask, its value corresponds to
-           points with an offset of (0.5,0.5), that should be added to output.
-           The coordinates origin is at the center of pixel (0,0).
-         */
-        rec.x1 += 0.5; rec.y1 += 0.5;
-        rec.x2 += 0.5; rec.y2 += 0.5;
+        
 
         /* scale the result values if a subsampling was performed */
         if( scale != 1.0 )
