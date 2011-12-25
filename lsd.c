@@ -2249,13 +2249,13 @@ void prepare_segments(struct rect *points, int *size,
 
 void line_segment_grower(double * img, int X, int Y,
                                double scale, double sigma_scale,
-                               double ang_th, double log_eps,
+                               double ang_th, int use_NFA, double log_eps,
                                int ** reg_img, int * reg_x, int * reg_y,
                                ntuple_list out,  unsigned int xsize,
                                unsigned int ysize, image_int region,
                                struct rect *points, int size,
-                               image_double image, double length_threshold,
-                               double dist_threshold )
+                               image_double image, image_double angles,
+                               double length_threshold, double dist_threshold )
 {
   int *used;
   struct rect rec;
@@ -2311,11 +2311,12 @@ void line_segment_grower(double * img, int X, int Y,
         /* construct rectangular approximation for the region */
         rects2rect(reg,reg_size,points,reg_angle,prec,p,&rec);
         
-
-        ///* compute NFA value */
-        //log_nfa = rect_improve(&rec,angles,logNT,log_eps);
-        ////printf("nfa: %lf %lf\n", log_nfa, log_eps);
-        //if( log_nfa <= log_eps ) continue;
+        if (use_NFA) {
+            ///* compute NFA value */
+            log_nfa = rect_improve(&rec,angles,logNT,log_eps);
+            printf("nfa: %lf %lf\n", log_nfa, log_eps);
+            if( log_nfa <= log_eps ) continue;
+        }
 
         /* A New Line Segment was found! */
         ++ls_count;  /* increase line segment counter */
@@ -2362,7 +2363,7 @@ double * LineSegmentDetection( int * n_out,
                                double * img, int X, int Y,
                                double scale, double sigma_scale, double quant,
                                double ang_th, double log_eps, double density_th,
-                               double union_ang_th, double union_log_eps,
+                               double union_ang_th, int union_use_NFA, double union_log_eps,
                                int n_bins, int need_to_union,
                                int ** reg_img, int * reg_x, int * reg_y,
                                double length_threshold, double dist_threshold )
@@ -2527,10 +2528,10 @@ double * LineSegmentDetection( int * n_out,
   
   if (need_to_union) {
       line_segment_grower(img, X, Y, scale, sigma_scale,
-                            union_ang_th, union_log_eps,
+                            union_ang_th, union_use_NFA, union_log_eps,
                             reg_img, reg_x, reg_y, out,
                             xsize, ysize, region, rects, rects_u,
-                            image, length_threshold, dist_threshold);
+                            image, angles, length_threshold, dist_threshold);
   }
   
 
@@ -2595,16 +2596,17 @@ double * lsd_scale_region( int * n_out,
   // FIXME: get good initial parametrs
   int need_to_union = 0;    /* Bool if you need to post procces image by 
                                union close segments                           */
-  double union_ang_th = 22.5;
+  double union_ang_th = 7;
+  int union_use_NFA = 0;
   double union_log_eps = 0.0;
-  double length_threshold = 10; /* Minimum length of segment to union     */
-  double dist_threshold = 10;   /* Maximum distance between two line which 
+  double length_threshold = 5; /* Minimum length of segment to union     */
+  double dist_threshold = 5;   /* Maximum distance between two line which 
                                    we would union                             */
                                    
   return LineSegmentDetection( n_out, img, X, Y, scale, sigma_scale, quant,
                                ang_th, log_eps, density_th, union_ang_th, 
-                               union_log_eps, n_bins, need_to_union,
-                               reg_img, reg_x, reg_y,
+                               union_use_NFA, union_log_eps, n_bins,
+                               need_to_union, reg_img, reg_x, reg_y,
                                length_threshold, dist_threshold );
 }
 

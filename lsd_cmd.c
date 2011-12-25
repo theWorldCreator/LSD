@@ -57,7 +57,7 @@
       Do you need to post procces image by union close segments                \
 #opt: union_ang_th | A | double | 7 | 0.0 | 180.0 |                         \
       Union angle tolerance in degrees.                                        \
-#opt: union_log_eps | E | double | 0.0 | | |                                   \
+#opt: union_log_eps | E | double | -1.0 | | |                                   \
       Union detection threshold                                                \
 #opt: length_threshold | L | double | 5 | 0.0 | |                             \
       Minimum length of segment to union                                       \
@@ -1090,6 +1090,7 @@ int main(int argc, char ** argv)
                                get_double(arg,"log_eps"),
                                get_double(arg,"density_th"),
                                get_double(arg,"union_ang_th"),
+                               get_double(arg,"union_log_eps") >= 0,
                                get_double(arg,"union_log_eps"),
                                get_int(arg,"n_bins"),
                                get_int(arg,"need_to_union"),
