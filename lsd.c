@@ -2039,7 +2039,7 @@ double points_distance(double x1, double y1, double x2, double y2) {
     return sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
 }
 
-double rect_distance(struct rect *a, struct rect *b, double infinity)
+double rect_distance(struct rect *a, struct rect *b, double infinity, int *u_a_c, int *u_b_c)
 {
     int a_c = 1, b_c = 1;
     double dist11 = points_distance(a->x1, a->y1, b->x1, b->y1);
@@ -2075,6 +2075,10 @@ double rect_distance(struct rect *a, struct rect *b, double infinity)
     }
     if (a_c == 2 && b_c == 2) {
         if ( dist12 > dist11 ) return infinity;
+    }
+    if (u_a_c && u_b_c) {
+        *u_a_c = a_c;
+        *u_b_c = b_c;
     }
     return dist;
 }
@@ -2182,41 +2186,38 @@ static void g_region_grow( int init_ind, int * reg,
                          double length_threshold )
 {
   double sumdx,sumdy, dx, dy;
-  int i, j, prev_accepted;
+  int i, j, a, b;
   struct rect *init_point = &points[init_ind];
 
   /* first points of the region */
   *reg_size = 1;
   reg[0] = init_ind;
-  *reg_angle = init_point->theta;
+  *reg_angle = atan2(points[init_ind].y2 - points[init_ind].y1,points[init_ind].x2 - points[init_ind].x1);
   sumdx = 0;
   sumdy = 0;
   used[init_ind] = USED;
   
   /* try neighbors */
-  for(i = 0, prev_accepted = init_ind; i<*reg_size; i++)
+  for(i = 0; i<*reg_size; i++)
     for(j = 0; j < n; j++) {
       if (used[j] != USED &&
-        rect_distance(init_point, &points[j], dist_threshold + 1) <= dist_threshold) {
-            dx = points[j].x - points[prev_accepted].x;
-            dy = points[j].y - points[prev_accepted].y;
-            if (dx < 0) {
-                dx *= -1.0;
-            }
-            if (dy < 0) {
-                dy *= -1.0;
-            }
-            if (isaligned_(atan2(dy, dx), *reg_angle, prec)) {
-                /* add two points */
+        rect_distance(&points[reg[i]], &points[j], dist_threshold + 1, &a, &b) <= dist_threshold) {
+            if (isaligned_(points[j].theta, *reg_angle, prec)) {
+                /* add neighbor */
                 used[j] = USED;
                 reg[*reg_size] = j;
                 ++(*reg_size);
 
                 /* update region's angle */
+                dx = points[j].x - points[reg[i]].x;
+                dy = points[j].y - points[reg[i]].y;
+                if (a == 1) {
+                    dx *= -1.0;
+                    dy *= -1.0;
+                }
                 sumdx += dx;
                 sumdy += dy;
                 *reg_angle = atan2(sumdy,sumdx);
-                prev_accepted = j;
             }
         }
     }
@@ -2266,8 +2267,6 @@ void line_segment_grower(double * img, int X, int Y,
   free( (void *) out );
   out = new_ntuple_list(7);
   
-
-
   /* angle tolerance */
   prec = M_PI * ang_th / 180.0;
   p = ang_th / 180.0;
@@ -2404,7 +2403,6 @@ double * LineSegmentDetection( int * n_out,
   prec = M_PI * ang_th / 180.0;
   p = ang_th / 180.0;
   rho = quant / sin(prec); /* gradient magnitude threshold */
-
 
   /* load and scale image (if necessary) and compute angle at each pixel */
   image = new_image_double_ptr( (unsigned int) X, (unsigned int) Y, img );
@@ -2602,7 +2600,7 @@ double * lsd_scale_region( int * n_out,
   double length_threshold = 10; /* Minimum length of segment to union     */
   double dist_threshold = 10;   /* Maximum distance between two line which 
                                    we would union                             */
-
+                                   
   return LineSegmentDetection( n_out, img, X, Y, scale, sigma_scale, quant,
                                ang_th, log_eps, density_th, union_ang_th, 
                                union_log_eps, n_bins, need_to_union,

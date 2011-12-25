@@ -61,7 +61,7 @@
       Union detection threshold                                                \
 #opt: length_threshold | L | double | 5 | 0.0 | |                             \
       Minimum length of segment to union                                       \
-#opt: dist_threshold | D | double | 25 | 0.0 | |                               \
+#opt: dist_threshold | D | double | 5 | 0.0 | |                               \
       Maximum distance between two line which we would union                   \
 #req: in  | | str | | | | Input image (PGM)                                    \
 #req: out | | str | | | |                                                      \
