@@ -880,6 +880,33 @@ static image_double ll_angle( image_double in, double threshold,
 }
 
 /*----------------------------------------------------------------------------*/
+/** Is point with angle theta_test aligned to angle theta, up to precision 'prec'?
+ */
+static int isaligned_( double theta_test, double theta,
+                      double prec )
+{
+  /* check parameters */
+  if( prec < 0.0 ) error("isaligned: 'prec' must be positive.");
+
+  /* pixels whose level-line angle is not defined
+     are considered as NON-aligned */
+  if( theta_test == NOTDEF ) return FALSE;  /* there is no need to call the function
+                                      'double_equal' here because there is
+                                      no risk of problems related to the
+                                      comparison doubles, we are only
+                                      interested in the exact NOTDEF value */
+
+  /* it is assumed that 'theta' and 'a' are in the range [-pi,pi] */
+  theta -= theta_test;
+  if( theta < 0.0 ) theta = -theta;
+  if( theta > M_3_2_PI )
+    {
+      theta -= M_2__PI;
+      if( theta < 0.0 ) theta = -theta;
+    }
+  return theta <= prec;
+}
+
 /** Is point (x,y) aligned to angle theta, up to precision 'prec'?
  */
 static int isaligned( int x, int y, image_double angles, double theta,
@@ -897,23 +924,7 @@ static int isaligned( int x, int y, image_double angles, double theta,
   /* angle at pixel (x,y) */
   a = angles->data[ x + y * angles->xsize ];
 
-  /* pixels whose level-line angle is not defined
-     are considered as NON-aligned */
-  if( a == NOTDEF ) return FALSE;  /* there is no need to call the function
-                                      'double_equal' here because there is
-                                      no risk of problems related to the
-                                      comparison doubles, we are only
-                                      interested in the exact NOTDEF value */
-
-  /* it is assumed that 'theta' and 'a' are in the range [-pi,pi] */
-  theta -= a;
-  if( theta < 0.0 ) theta = -theta;
-  if( theta > M_3_2_PI )
-    {
-      theta -= M_2__PI;
-      if( theta < 0.0 ) theta = -theta;
-    }
-  return theta <= prec;
+  return isaligned_(a, theta, prec);
 }
 
 /*----------------------------------------------------------------------------*/
@@ -2024,71 +2035,189 @@ double min(double a, double b)
     return a < b ? a : b;
 }
 
-double rect_distance(struct rect *a, struct rect *b)
+double points_distance(double x1, double y1, double x2, double y2) {
+    return sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+}
+
+double rect_distance(struct rect *a, struct rect *b, double infinity)
 {
-    double dist = sqrt((a->x1 - b->x1) * (a->x1 - b->x1) + (a->y1 - b->y1) * (a->y1 - b->y1)); // a->1 and b->1
-    dist = min(dist, sqrt((a->x2 - b->x1) * (a->x2 - b->x1) + (a->y2 - b->y1) * (a->y2 - b->y1))); // a->2 and b->1
-    dist = min(dist, sqrt((a->x1 - b->x2) * (a->x1 - b->x2) + (a->y1 - b->y2) * (a->y1 - b->y2))); // a->1 and b->2
-    dist = min(dist, sqrt((a->x2 - b->x2) * (a->x2 - b->x2) + (a->y2 - b->y2) * (a->y2 - b->y2))); // a->2 and b->2
+    int a_c = 1, b_c = 1;
+    double dist11 = points_distance(a->x1, a->y1, b->x1, b->y1);
+    double dist = dist11;
+    double dist12 = points_distance(a->x1, a->y1, b->x2, b->y2);
+    if (dist12 < dist) {
+        dist = dist12;
+        a_c = 1;
+        b_c = 2;
+    }
+    double dist21 = points_distance(a->x2, a->y2, b->x1, b->y1);
+    if (dist21 < dist) {
+        dist = dist21;
+        a_c = 2;
+        b_c = 1;
+    }
+    double dist22 = points_distance(a->x2, a->y2, b->x2, b->y2);
+    if (dist22 < dist) {
+        dist = dist22;
+        a_c = 2;
+        b_c = 2;
+    }
+    
+    // check if rectangles are parallel
+    if (a_c == 1 && b_c == 1) {
+        if ( dist21 > dist22 ) return infinity;
+    }
+    if (a_c == 1 && b_c == 2) {
+        if ( dist22 > dist21 ) return infinity;
+    }
+    if (a_c == 2 && b_c == 1) {
+        if ( dist11 > dist12 ) return infinity;
+    }
+    if (a_c == 2 && b_c == 2) {
+        if ( dist12 > dist11 ) return infinity;
+    }
     return dist;
 }
 
 
 
-static void g_region_grow( struct rect *init_point, image_double angles, struct point * reg,
-                         int * reg_size, double * reg_angle, image_char used,
+
+/*----------------------------------------------------------------------------*/
+static void rects2rect( int * reg, int reg_size,
+                         struct rect * points, double reg_angle,
+                         double prec, double p, struct rect * rec )
+{
+  double x,y,dx,dy,l,w,theta,weight,sum,l_min,l_max,w_min,w_max;
+  int i;
+
+  /* check parameters */
+
+  /* center of the region:
+
+     It is computed as the weighted sum of the coordinates
+     of all the centers of the rectangles. The length of the rectangle
+     is used as the weight of a pixel. The sum is as follows
+   */
+  x = y = sum = 0.0;
+  
+  for(i=0; i<reg_size; i++)
+    {
+      weight = points[reg[i]].length;
+      x += (double) points[reg[i]].x * weight;
+      y += (double) points[reg[i]].y * weight;
+      sum += weight;
+    }
+  x /= sum;
+  y /= sum;
+
+  /* theta */
+  //theta = get_theta(reg,reg_size,x,y,modgrad,reg_angle,prec);
+  // FIXME!!!!
+  theta = reg_angle;
+
+  /* length and width:
+
+     'l' and 'w' are computed as the distance from the center of the
+     region to pixel i, projected along the rectangle axis (dx,dy) and
+     to the orthogonal axis (-dy,dx), respectively.
+
+     The length of the rectangle goes from l_min to l_max, where l_min
+     and l_max are the minimum and maximum values of l in the region.
+     Analogously, the width is selected from w_min to w_max, where
+     w_min and w_max are the minimum and maximum of w for the pixels
+     in the region.
+   */
+  dx = cos(theta);
+  dy = sin(theta);
+  l_min = l_max = w_min = w_max = 0.0;
+  for(i=0; i<reg_size; i++)
+    {
+      l =  ( (double) points[reg[i]].x1 - x) * dx + ( (double) points[reg[i]].y1 - y) * dy;
+      w = -( (double) points[reg[i]].x1 - x) * dy + ( (double) points[reg[i]].y1 - y) * dx;
+
+      if( l > l_max ) l_max = l;
+      if( l < l_min ) l_min = l;
+      if( w > w_max ) w_max = w;
+      if( w < w_min ) w_min = w;
+      
+      l =  ( (double) points[reg[i]].x2 - x) * dx + ( (double) points[reg[i]].y2 - y) * dy;
+      w = -( (double) points[reg[i]].x2 - x) * dy + ( (double) points[reg[i]].y2 - y) * dx;
+
+      if( l > l_max ) l_max = l;
+      if( l < l_min ) l_min = l;
+      if( w > w_max ) w_max = w;
+      if( w < w_min ) w_min = w;
+    }
+
+  /* store values */
+  rec->x1 = x + l_min * dx;
+  rec->y1 = y + l_min * dy;
+  rec->x2 = x + l_max * dx;
+  rec->y2 = y + l_max * dy;
+  rec->width = w_max - w_min;
+  rec->x = x;
+  rec->y = y;
+  rec->theta = theta;
+  rec->dx = dx;
+  rec->dy = dy;
+  rec->prec = prec;
+  rec->p = p;
+
+  /* we impose a minimal width of one pixel
+
+     A sharp horizontal or vertical step would produce a perfectly
+     horizontal or vertical region. The width computed would be
+     zero. But that corresponds to a one pixels width transition in
+     the image.
+   */
+  if( rec->width < 1.0 ) rec->width = 1.0;
+}
+
+
+
+
+static void g_region_grow( int init_ind, int * reg,
+                         int * reg_size, double * reg_angle, int * used,
                          struct rect *points, int n, double prec, double dist_threshold,
                          double length_threshold )
 {
-  double sumdx,sumdy;
-  int i, j;
-
-  /* check parameters */
-  if( angles == NULL || angles->data == NULL )
-    error("region_grow: invalid image 'angles'.");
-  if( reg == NULL ) error("region_grow: invalid 'reg'.");
-  if( reg_size == NULL ) error("region_grow: invalid pointer 'reg_size'.");
-  if( reg_angle == NULL ) error("region_grow: invalid pointer 'reg_angle'.");
-  if( used == NULL || used->data == NULL )
-    error("region_grow: invalid image 'used'.");
+  double sumdx,sumdy, dx, dy;
+  int i, j, prev_accepted;
+  struct rect *init_point = &points[init_ind];
 
   /* first points of the region */
-  *reg_size = 2;
-  reg[0].x = (int)init_point->x1;
-  reg[0].y = (int)init_point->y1;
-  *reg_angle = angles->data[(int) (init_point->x1 + init_point->y1 * angles->xsize)];  /* region's angle */
-  sumdx = cos(*reg_angle);
-  sumdy = sin(*reg_angle);
-  used->data[(int) (init_point->x1 + init_point->y1*used->xsize)] = USED;
-  reg[1].x = (int) init_point->x2;
-  reg[1].y = (int) init_point->y2;
-  used->data[(int) (init_point->x2 + init_point->y2*used->xsize)] = USED;
+  *reg_size = 1;
+  reg[0] = init_ind;
+  *reg_angle = init_point->theta;
+  sumdx = 0;
+  sumdy = 0;
+  used[init_ind] = USED;
   
-  /* try neighbors as new region points */
-  for(i=0; i<*reg_size; i++)
+  /* try neighbors */
+  for(i = 0, prev_accepted = init_ind; i<*reg_size; i++)
     for(j = 0; j < n; j++) {
-      if (used->data[(int) (points[j].x1 + points[j].y1 * used->xsize)] != USED &&
-        points[j].length >= length_threshold &&
-        rect_distance(init_point, &points[j]) <= dist_threshold &&
-        isaligned(points[j].x1, points[j].y1, angles, *reg_angle, prec)) {
-            /* add two points */
-            used->data[(int) (points[j].x1+points[j].y1*used->xsize)] = USED;
-            used->data[(int) (points[j].x2+points[j].y2*used->xsize)] = USED;
-            reg[*reg_size].x = (int)points[j].x1;
-            reg[*reg_size].y = (int)points[j].y1;
-            ++(*reg_size);
-            reg[*reg_size].x = (int)points[j].x2;
-            reg[*reg_size].y = (int)points[j].y2;
-            ++(*reg_size);
+      if (used[j] != USED &&
+        rect_distance(init_point, &points[j], dist_threshold + 1) <= dist_threshold) {
+            dx = points[j].x - points[prev_accepted].x;
+            dy = points[j].y - points[prev_accepted].y;
+            if (dx < 0) {
+                dx *= -1.0;
+            }
+            if (dy < 0) {
+                dy *= -1.0;
+            }
+            if (isaligned_(atan2(dy, dx), *reg_angle, prec)) {
+                /* add two points */
+                used[j] = USED;
+                reg[*reg_size] = j;
+                ++(*reg_size);
 
-            /* update region's angle */
-            sumdx += cos( angles->data[(int) (points[j].x1 + points[j].y1 * angles->xsize)] );
-            sumdy += sin( angles->data[(int) (points[j].x1+points[j].y1*angles->xsize)] );
-            sumdx += cos( angles->data[(int) (points[j].x2+points[j].y2*angles->xsize)] );
-            sumdy += sin( angles->data[(int) (points[j].x2+points[j].y2*angles->xsize)] );
-            *reg_angle = atan2(sumdy,sumdx);
-            
-            
+                /* update region's angle */
+                sumdx += dx;
+                sumdy += dy;
+                *reg_angle = atan2(sumdy,sumdx);
+                prev_accepted = j;
+            }
         }
     }
   }
@@ -2107,67 +2236,13 @@ int comp_rect_len(const void *a, const void *b)
     
 }
 
-static image_double segments_to_points(struct rect *points, int *size,
-                              image_double in, double length_threshold,
-                              image_double * modgrad)
+void prepare_segments(struct rect *points, int *size,
+                              image_double in, double length_threshold)
 {
   qsort(points, *size, sizeof(points[0]), comp_rect_len);
-  
-  image_double g;
-  unsigned int n,p,x,y,adr,i;
-  /* the rest of the variables are used for pseudo-ordering
-     the gradient magnitude values */
-
-  /* check parameters */
-  if( in == NULL || in->data == NULL || in->xsize == 0 || in->ysize == 0 )
-    error("segments_to_points: invalid image.");
-  if( modgrad == NULL ) error("segments_to_points: NULL pointer 'modgrad'.");
-
-  /* image size shortcuts */
-  n = in->ysize;
-  p = in->xsize;
-
-  /* allocate output image */
-  g = new_image_double(in->xsize,in->ysize);
-
-  /* get memory for the image of gradient modulus */
-  *modgrad = new_image_double(in->xsize,in->ysize);
-
-  
-  
-  /* 'undefined' by default */
-  for(x=0;x<p;x++)
-    for(y=0;y<n;y++)
-        g->data[p*y + x] = NOTDEF;
-
-  for(x=0;x<p;x++)
-    for(y=0;y<n;y++)
-        (*modgrad)->data[p*y + x] = 0;
-  
-  for (i = 0; i < *size; i++) {
-    // FIXME: what if this point already used by another segment?
-    if (points[i].theta >= M_PI) {
-        points[i].theta -= M_PI;
-    } else if (points[i].theta <= -M_PI) {
-        points[i].theta += M_PI;
-    }
-    adr = (int) (points[i].y1*p+points[i].x1);
-    (*modgrad)->data[adr] = points[i].length;
-    if( points[i].length < length_threshold ) {
-        i--;
-        break;
-    } else {
-        g->data[adr] = points[i].theta;
-    }
-    
-    adr = (int) (points[i].y2*p+points[i].x2);
-    (*modgrad)->data[adr] = points[i].length;
-    g->data[adr] = points[i].theta;
-  }
-  *size = i;
-
-
-  return g;
+  int i;
+  for (i = *size - 1; i >= 0 && points[i].length < length_threshold; i--) {}
+  *size = i + 1;
 }
 
 
@@ -2181,10 +2256,9 @@ void line_segment_grower(double * img, int X, int Y,
                                image_double image, double length_threshold,
                                double dist_threshold )
 {
-  image_double angles,modgrad;
-  image_char used;
+  int *used;
   struct rect rec;
-  struct point * reg;
+  int * reg;
   int reg_size, i, j;
   double reg_angle,prec,p,log_nfa,logNT;
   int ls_count = 0;                   /* line segments are numbered 1,2,3,... */
@@ -2198,7 +2272,7 @@ void line_segment_grower(double * img, int X, int Y,
   prec = M_PI * ang_th / 180.0;
   p = ang_th / 180.0;
   
-  angles = segments_to_points(points, &size, image, length_threshold, &modgrad);
+  prepare_segments(points, &size, image, length_threshold);
   
 
   /* Number of Tests - NT
@@ -2219,36 +2293,29 @@ void line_segment_grower(double * img, int X, int Y,
 
 
   /* initialize some structures */
-  used = new_image_char_ini(xsize,ysize,NOTUSED);
-  reg = (struct point *) calloc( (size_t) (xsize*ysize), sizeof(struct point) );
+  used = calloc(size, sizeof(used[0]));
+  reg = (int *) calloc( size, sizeof(reg[0]) );
   if( reg == NULL ) error("not enough memory!");
   if ( reg_img != NULL && reg_x != NULL && reg_y != NULL ) {
       free_image_int(region);
-      region = new_image_int_ini(angles->xsize,angles->ysize,0);
+      region = new_image_int_ini(image->xsize,image->ysize,0);
   }
 
   /* search for line segments */
-  for(j = 0; j < size; j++)
-    if( used->data[(int) (points[j].x1 + points[j].y1 * used->xsize)] == NOTUSED &&
-        angles->data[(int) (points[j].x1 + points[j].y1 * angles->xsize)] != NOTDEF )
-       /* there is no risk of double comparison problems here
-          because we are only interested in the exact NOTDEF value */
-      {
-        /* find the region of connected point and ~equal angle */
-        g_region_grow(&points[j], angles, reg, &reg_size,
+  for (j = 0; j < size; j++) {
+    if (used[j] == NOTUSED) {
+        /* find the ~ connected segments */
+        g_region_grow(j, reg, &reg_size,
                      &reg_angle, used, points, size,
                      prec, dist_threshold, length_threshold );
 
-        /* reject small regions */
-        //if( reg_size < min_reg_size ) continue;
-
         /* construct rectangular approximation for the region */
-        region2rect(reg,reg_size,modgrad,reg_angle,prec,p,&rec);
+        rects2rect(reg,reg_size,points,reg_angle,prec,p,&rec);
         
 
-        /* compute NFA value */
+        ///* compute NFA value */
         //log_nfa = rect_improve(&rec,angles,logNT,log_eps);
-        //printf("nfa: %lf %lf\n", log_nfa, log_eps);
+        ////printf("nfa: %lf %lf\n", log_nfa, log_eps);
         //if( log_nfa <= log_eps ) continue;
 
         /* A New Line Segment was found! */
@@ -2268,17 +2335,16 @@ void line_segment_grower(double * img, int X, int Y,
         add_7tuple( out, rec.x1, rec.y1, rec.x2, rec.y2,
                          rec.width, rec.p, log_nfa );
 
-        /* add region number to 'region' image if needed */
-        if( region != NULL )
-          for(i=0; i<reg_size; i++)
-            region->data[ reg[i].x + reg[i].y * region->xsize ] = ls_count;
+        ///* add region number to 'region' image if needed */
+        //if( region != NULL )
+          //for(i=0; i<reg_size; i++)
+            //region->data[ reg[i].x + reg[i].y * region->xsize ] = ls_count;
       }
+  }
 
 
   /* free memory */
-  free_image_double(angles);
-  free_image_double(modgrad);
-  free_image_char(used);
+  free(used);
   free( (void *) reg );
 
 }
