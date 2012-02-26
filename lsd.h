@@ -28,6 +28,21 @@
 #ifndef LSD_HEADER
 #define LSD_HEADER
 
+struct rect
+{
+  double x1,y1,x2,y2;  /* first and second point of the line segment */
+  double width;        /* rectangle width */
+  double x,y;          /* center of the rectangle */
+  double theta;        /* angle */
+  double dx,dy;        /* (dx,dy) is vector oriented as the line segment */
+  double prec;         /* tolerance angle */
+  double p;            /* probability of a point with angle within 'prec' */
+};
+
+typedef struct image_double_s * image_double;
+void free_obj_memory(image_double *obj_angles);
+double rect_nfa(struct rect * rec, image_double angles, double logNT);
+
 /*----------------------------------------------------------------------------*/
 /** LSD Full Interface
 
@@ -132,7 +147,9 @@ double * LineSegmentDetection( int * n_out,
                                double scale, double sigma_scale, double quant,
                                double ang_th, double log_eps, double density_th,
                                int n_bins,
-                               int ** reg_img, int * reg_x, int * reg_y );
+                               int ** reg_img, int * reg_x, int * reg_y,
+                               image_double *obj_angles, double *obj_logNT,
+                               double *obj_prec, double *obj_p );
 
 /*----------------------------------------------------------------------------*/
 /** LSD Simple Interface with Scale and Region output.

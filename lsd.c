@@ -1144,18 +1144,6 @@ static double nfa(int n, int k, double p, double logNT)
 /*----------------------------------------------------------------------------*/
 
 /*----------------------------------------------------------------------------*/
-/** Rectangle structure: line segment with width.
- */
-struct rect
-{
-  double x1,y1,x2,y2;  /* first and second point of the line segment */
-  double width;        /* rectangle width */
-  double x,y;          /* center of the rectangle */
-  double theta;        /* angle */
-  double dx,dy;        /* (dx,dy) is vector oriented as the line segment */
-  double prec;         /* tolerance angle */
-  double p;            /* probability of a point with angle within 'prec' */
-};
 
 /*----------------------------------------------------------------------------*/
 /** Copy one rectangle structure to another.
@@ -1459,7 +1447,7 @@ static rect_iter * ri_ini(struct rect * r)
 /*----------------------------------------------------------------------------*/
 /** Compute a rectangle's NFA value.
  */
-static double rect_nfa(struct rect * rec, image_double angles, double logNT)
+double rect_nfa(struct rect * rec, image_double angles, double logNT)
 {
   rect_iter * i;
   int pts = 0;
@@ -1479,7 +1467,6 @@ static double rect_nfa(struct rect * rec, image_double angles, double logNT)
           ++alg; /* aligned points counter */
       }
   ri_del(i); /* delete iterator */
-
   return nfa(pts,alg,rec->p,logNT); /* compute NFA value */
 }
 
@@ -1741,9 +1728,8 @@ static double rect_improve( struct rect * rec, image_double angles,
   double delta = 0.5;
   double delta_2 = delta / 2.0;
   int n;
-
   log_nfa = rect_nfa(rec,angles,logNT);
-
+  
   if( log_nfa > log_eps ) return log_nfa;
 
   /* try finer precisions */
@@ -1995,6 +1981,11 @@ static int refine( struct point * reg, int * reg_size, image_double modgrad,
 }
 
 
+void free_obj_memory(image_double *obj_angles) {
+	free_image_double(*obj_angles);
+	*obj_angles = NULL;
+}
+
 /*----------------------------------------------------------------------------*/
 /*-------------------------- Line Segment Detector ---------------------------*/
 /*----------------------------------------------------------------------------*/
@@ -2007,7 +1998,9 @@ double * LineSegmentDetection( int * n_out,
                                double scale, double sigma_scale, double quant,
                                double ang_th, double log_eps, double density_th,
                                int n_bins,
-                               int ** reg_img, int * reg_x, int * reg_y )
+                               int ** reg_img, int * reg_x, int * reg_y,
+                               image_double *obj_angles, double *obj_logNT,
+                               double *obj_prec, double *obj_p )
 {
   image_double image;
   ntuple_list out = new_ntuple_list(7);
@@ -2075,6 +2068,12 @@ double * LineSegmentDetection( int * n_out,
           + log10(11.0);
   min_reg_size = (int) (-logNT/log10(p)); /* minimal number of points in region
                                              that can give a meaningful event */
+  if (obj_angles && obj_logNT && obj_prec && obj_p) {
+    *obj_angles = angles;
+    *obj_logNT = logNT;
+    *obj_prec = prec;
+    *obj_p = p;
+  }
 
 
   /* initialize some structures */
@@ -2152,7 +2151,7 @@ double * LineSegmentDetection( int * n_out,
   free( (void *) image );   /* only the double_image structure should be freed,
                                the data pointer was provided to this functions
                                and should not be destroyed.                 */
-  free_image_double(angles);
+  
   free_image_double(modgrad);
   free_image_char(used);
   free( (void *) reg );
@@ -2206,7 +2205,7 @@ double * lsd_scale_region( int * n_out,
 
   return LineSegmentDetection( n_out, img, X, Y, scale, sigma_scale, quant,
                                ang_th, log_eps, density_th, n_bins,
-                               reg_img, reg_x, reg_y );
+                               reg_img, reg_x, reg_y, NULL, NULL, NULL, NULL );
 }
 
 /*----------------------------------------------------------------------------*/

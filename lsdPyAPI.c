@@ -2,129 +2,54 @@
 
 
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
-#include <string.h>
-#include <ctype.h>
-#include "lsd.h"
+#include "lsd_io.c"
 
-#ifndef FALSE
-#define FALSE 0
-#endif /* !FALSE */
+#include <Python.h>
+#include "structmember.h"
 
-#ifndef TRUE
-#define TRUE 1
-#endif /* !TRUE */
+typedef struct {
+    PyObject_HEAD
+    PyObject *regions;
+    image_double angles;
+    double logNT;
+    double prec;
+    double p;
+    double scale;
+} LSD;
 
-
-/*----------------------------------------------------------------------------*/
-/** Fatal error, print a message to standard-error output and exit.
- */
-static void error(char * msg)
+static void
+LSD_dealloc(LSD* self)
 {
-  fprintf(stderr,"%s\n",msg);
-  exit(EXIT_FAILURE);
+    free_obj_memory(&self->angles);
+    self->ob_type->tp_free((PyObject*)self);
 }
-
-
-/*----------------------------------------------------------------------------*/
-/*------------------------------ PGM image I/O -------------------------------*/
-/*----------------------------------------------------------------------------*/
-
-/*----------------------------------------------------------------------------*/
-/** Skip white characters and comments in a PGM file.
- */
-static void skip_whites_and_comments(FILE * f)
-{
-  int c;
-  do
-    {
-      while(isspace(c=getc(f))); /* skip spaces */
-      if(c=='#') /* skip comments */
-        while( c!='\n' && c!='\r' && c!=EOF )
-          c=getc(f);
-    }
-  while( c == '#' || isspace(c) );
-  if( c != EOF && ungetc(c,f) == EOF )
-    error("Error: unable to 'ungetc' while reading PGM file.");
-}
-
-/*----------------------------------------------------------------------------*/
-/** Read a ASCII number from a PGM file.
- */
-static int get_num(FILE * f)
-{
-  int num,c;
-
-  while(isspace(c=getc(f)));
-  if(!isdigit(c)) error("Error: corrupted PGM file.");
-  num = c - '0';
-  while( isdigit(c=getc(f)) ) num = 10 * num + c - '0';
-  if( c != EOF && ungetc(c,f) == EOF )
-    error("Error: unable to 'ungetc' while reading PGM file.");
-
-  return num;
-}
-
-/*----------------------------------------------------------------------------*/
-/** Read a PGM file into an double image.
-    If the name is "-" the file is read from standard input.
- */
-static double * read_pgm_image_double(int * X, int * Y, char * name)
-{
-  FILE * f;
-  int c,bin;
-  int xsize,ysize,depth,x,y;
-  double * image;
-
-  /* open file */
-  if( strcmp(name,"-") == 0 ) f = stdin;
-  else f = fopen(name,"rb");
-  if( f == NULL ) error("Error: unable to open input image file.");
-
-  /* read header */
-  if( getc(f) != 'P' ) error("Error: not a PGM file!");
-  if( (c=getc(f)) == '2' ) bin = FALSE;
-  else if( c == '5' ) bin = TRUE;
-  else error("Error: not a PGM file!");
-  skip_whites_and_comments(f);
-  xsize = get_num(f);            /* X size */
-  if(xsize<=0) error("Error: X size <=0, invalid PGM file\n");
-  skip_whites_and_comments(f);
-  ysize = get_num(f);            /* Y size */
-  if(ysize<=0) error("Error: Y size <=0, invalid PGM file\n");
-  skip_whites_and_comments(f);
-  depth = get_num(f);            /* depth */
-  if(depth<=0) fprintf(stderr,"Warning: depth<=0, probably invalid PGM file\n");
-  /* white before data */
-  if(!isspace(c=getc(f))) error("Error: corrupted PGM file.");
-
-  /* get memory */
-  image = (double *) calloc( (size_t) (xsize*ysize), sizeof(double) );
-  if( image == NULL ) error("Error: not enough memory.");
-
-  /* read data */
-  for(y=0;y<ysize;y++)
-    for(x=0;x<xsize;x++)
-      image[ x + y * xsize ] = bin ? (double) getc(f)
-                                   : (double) get_num(f);
-
-  /* close file if needed */
-  if( f != stdin && fclose(f) == EOF )
-    error("Error: unable to close file while reading PGM file.");
-
-  /* return image */
-  *X = xsize;
-  *Y = ysize;
-  return image;
-}
-
 
 static PyObject *
-lsd_call(PyObject *self, PyObject *args, PyObject *keywds)
+LSD_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
-  double * image = NULL;
+    LSD *self;
+
+    self = (LSD *)type->tp_alloc(type, 0);
+    if (self != NULL) {
+		self->regions = Py_BuildValue("[]");
+        if (self->regions == NULL)
+          {
+            Py_DECREF(self);
+            return NULL;
+          }
+        self->angles = NULL;
+        self->logNT = -1;
+        self->prec = -1;
+        self->p = -1;
+    }
+
+    return (PyObject *)self;
+}
+
+static int
+LSD_init(LSD *self, PyObject *args, PyObject *keywds)
+{
+    double * image = NULL;
   int X = 0,Y = 0;
   double * segs;
   int n;
@@ -132,7 +57,7 @@ lsd_call(PyObject *self, PyObject *args, PyObject *keywds)
   //int * region;
   int regX,regY;
   int i;
-  PyObject *py_region = NULL, *py_reg_list = NULL;
+  PyObject *py_region = NULL;
   
   double scale, sigma_coef, quant, ang_th, log_eps, density_th;
   int n_bins;
@@ -142,30 +67,33 @@ lsd_call(PyObject *self, PyObject *args, PyObject *keywds)
   static char *kwlist[] = {"scale", "sigma_coef", "quant", 
 							  "ang_th", "log_eps", "density_th", 
 							  "n_bins", "image_path", NULL};
-  if (!PyArg_ParseTupleAndKeywords(args, keywds, "ddddddis", kwlist,
+  if (!PyArg_ParseTupleAndKeywords(args, keywds, "ddddddi|s", kwlist,
                                      &scale, &sigma_coef, &quant,
                                      &ang_th, &log_eps, &density_th,
                                      &n_bins, &image_path)) {
-    return NULL;
+    return -1; 
   }
+  
+  self->scale = scale;
 
   /* read input file */
   image = read_pgm_image_double(&X,&Y,image_path);
-
+  
   /* execute LSD */
   segs = LineSegmentDetection( &n, image, X, Y,
-                               scale,
-                               sigma_coef,
-                               quant,
-                               ang_th,
-                               log_eps,
-                               density_th,
-                               n_bins,
-                               //is_assigned(arg,"reg") ? &region : NULL,
-                               NULL, // FIXME, what is it?
-                               &regX, &regY );
-                               
-    py_reg_list = Py_BuildValue("[]");
+						   scale,
+						   sigma_coef,
+						   quant,
+						   ang_th,
+						   log_eps,
+						   density_th,
+						   n_bins,
+						   //is_assigned(arg,"reg") ? &region : NULL,
+						   NULL, // FIXME, what is it?
+						   &regX, &regY,
+						   &self->angles, &self->logNT,
+						   &self->prec, &self->p);
+	
     
     for(i=0;i<n;i++)
     {
@@ -174,20 +102,134 @@ lsd_call(PyObject *self, PyObject *args, PyObject *keywds)
 						"x2", segs[i*dim+2], "y2", segs[i*dim+3],
 						"width", segs[i*dim+4], "p", segs[i*dim+5],
 						"NFA", segs[i*dim+6]);
-      PyList_Append(py_reg_list, py_region);
+      PyList_Append(self->regions, py_region);
     }
-              
-    return py_reg_list;
+    
+
+    return 0;
 }
 
-static PyMethodDef LSDMethods[] = {
-    {"lsd",  (PyCFunction)lsd_call, METH_VARARGS | METH_KEYWORDS,
-     "Main function"},
-    {NULL, NULL, 0, NULL}        /* Sentinel */
+static PyMemberDef LSD_members[] = {
+    {"regions", T_OBJECT_EX, offsetof(LSD, regions), 0,
+     "regions list"},
+    {NULL}  /* Sentinel */
 };
 
-PyMODINIT_FUNC
-initlsdPyAPI(void)
+static PyObject *
+LSD_NFA(LSD* self, PyObject *args, PyObject *keywds)
 {
-  (void) Py_InitModule("lsdPyAPI", LSDMethods);
+	struct rect rec;
+	double dx, dy;
+	
+	
+	static char *kwlist[] = {"x1", "y1", "x2",
+								"y2", "width", NULL};
+	if (!PyArg_ParseTupleAndKeywords(args, keywds, "ddddd", kwlist,
+                                     &rec.x1, &rec.y1, &rec.x2,
+                                     &rec.y2, &rec.width)) {
+		return NULL; 
+	}
+	// return to algorithm coordinate system
+	if( self->scale != 1.0 )
+	  {
+		rec.x1 *= self->scale; rec.y1 *= self->scale;
+		rec.x2 *= self->scale; rec.y2 *= self->scale;
+		rec.width *= self->scale;
+	  }
+	rec.x1 -= 0.5;
+	rec.y1 -= 0.5;
+	rec.x2 -= 0.5;
+	rec.y2 -= 0.5;
+	
+	
+  
+	
+	rec.x = (rec.x1 + rec.x2) / 2;
+	rec.y = (rec.y1 + rec.y2) / 2;
+	
+	dx = rec.x2 - rec.x1;
+	dy = rec.y2 - rec.y1;
+	rec.theta = atan2(dy, dx);
+	rec.dx = cos(rec.theta);
+	rec.dy = sin(rec.theta);
+	rec.prec = self->prec;
+	rec.p = self->p;
+	double NFA = rect_nfa(&rec, self->angles, self->logNT);
+	return Py_BuildValue("d", NFA);
+}
+
+static PyMethodDef LSD_methods[] = {
+    {"NFA", (PyCFunction)LSD_NFA, METH_VARARGS | METH_KEYWORDS,
+     "Return -log10(NFA) value for specified region"
+    },
+    {NULL}  /* Sentinel */
+};
+
+static PyTypeObject LSDType = {
+    PyObject_HEAD_INIT(NULL)
+    0,                         /*ob_size*/
+    "lsd.lsd",                 /*tp_name*/
+    sizeof(LSD),             /*tp_basicsize*/
+    0,                         /*tp_itemsize*/
+    (destructor)LSD_dealloc, /*tp_dealloc*/
+    0,                         /*tp_print*/
+    0,                         /*tp_getattr*/
+    0,                         /*tp_setattr*/
+    0,                         /*tp_compare*/
+    0,                         /*tp_repr*/
+    0,                         /*tp_as_number*/
+    0,                         /*tp_as_sequence*/
+    0,                         /*tp_as_mapping*/
+    0,                         /*tp_hash */
+    0,                         /*tp_call*/
+    0,                         /*tp_str*/
+    0,                         /*tp_getattro*/
+    0,                         /*tp_setattro*/
+    0,                         /*tp_as_buffer*/
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /*tp_flags*/
+    "LSD objects",           /* tp_doc */
+    0,		               /* tp_traverse */
+    0,		               /* tp_clear */
+    0,		               /* tp_richcompare */
+    0,		               /* tp_weaklistoffset */
+    0,		               /* tp_iter */
+    0,		               /* tp_iternext */
+    LSD_methods,            /* tp_methods */
+    LSD_members,             /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    (initproc)LSD_init,      /* tp_init */
+    0,                         /* tp_alloc */
+    LSD_new,                 /* tp_new */
+};
+
+static PyMethodDef module_methods[] = {
+    {NULL}  /* Sentinel */
+};
+
+
+
+#ifndef PyMODINIT_FUNC	/* declarations for DLL import/export */
+#define PyMODINIT_FUNC void
+#endif
+PyMODINIT_FUNC
+initlsd(void)
+{
+	PyObject* m;
+
+    if (PyType_Ready(&LSDType) < 0)
+        return;
+
+    m = Py_InitModule3("lsd", module_methods,
+                       "LSD API module.");
+
+    if (m == NULL)
+      return;
+
+    Py_INCREF(&LSDType);
+    PyModule_AddObject(m, "lsd", (PyObject *)&LSDType);
 }

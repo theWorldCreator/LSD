@@ -6,16 +6,20 @@ To install it to your Python interpreter, type:
 
 
 Usage example:
-	from lsdPyAPI import lsd
-	answ = lsd(scale = 0.8, sigma_coef = 0.6, quant = 2.0,
-	ang_th = 22.5, log_eps = 0, density_th = 0.7,
-	n_bins = 1024, image_path = "data/1.pgm")
+	from lsd import lsd
+	image = lsd(scale = 0.8, sigma_coef = 0.6, quant = 2.0,
+				ang_th = 22.5, log_eps = 0, density_th = 0.7,
+				n_bins = 1024, image_path = "data/1.pgm")
 
-answ will be a list with dicts, each dict describe one region:
+image will be an object with attribute region -- list with dicts, each dict describe one region:
 	{'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2, 'width': width,
-	'p': p, 'NFA': NFA}
+		'p': p, 'NFA': NFA}
 	
 Where NFA is actually -log10(NFA)
 and p is an angle precision in radians (by default it is
 equal to ang_th / 180, but if potentially good region have very
 small NFA value, algorithm will try finer precisions)
+
+And method NFA:
+	answ = image.NFA(x1, y1, x2, y2, width)
+answ is equal to -log10(NFA)
