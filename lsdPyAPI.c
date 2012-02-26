@@ -2,6 +2,7 @@
 
 
 
+#include <float.h>
 #include "lsd_io.c"
 
 #include <Python.h>
@@ -59,19 +60,41 @@ LSD_init(LSD *self, PyObject *args, PyObject *keywds)
   int i;
   PyObject *py_region = NULL;
   
-  double scale, sigma_coef, quant, ang_th, log_eps, density_th;
-  int n_bins;
+  double scale = -1, sigma_coef = -1, quant = -1, ang_th = -1, log_eps = -DBL_MAX, density_th = -1;
+  int n_bins = -1;
   char *image_path = NULL;
   
   
   static char *kwlist[] = {"scale", "sigma_coef", "quant", 
 							  "ang_th", "log_eps", "density_th", 
 							  "n_bins", "image_path", NULL};
-  if (!PyArg_ParseTupleAndKeywords(args, keywds, "ddddddi|s", kwlist,
+  if (!PyArg_ParseTupleAndKeywords(args, keywds, "|ddddddis", kwlist,
                                      &scale, &sigma_coef, &quant,
                                      &ang_th, &log_eps, &density_th,
                                      &n_bins, &image_path)) {
     return -1; 
+  }
+  if (scale < 0.0) {
+	  scale = 0.8;
+  }
+  if (sigma_coef < 0.0) {
+	  sigma_coef = 0.6;
+  }
+  if (quant < 0.0) {
+	  quant = 2.0;
+  }
+  if (ang_th < 0.0 || ang_th > 180.0) {
+	  ang_th = 22.5;
+  }
+  //log_eps is too small for normal work
+  if (log_eps < -DBL_MAX / 2.0) {
+	  log_eps = 0;
+  }
+  if (density_th < 0.0 || ang_th > 1.0) {
+	  density_th = 0.7;
+  }
+  if (n_bins < 1) {
+	  n_bins = 1024;
   }
   
   self->scale = scale;
