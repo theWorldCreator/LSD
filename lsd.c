@@ -1608,6 +1608,47 @@ static double get_theta( struct point * reg, int reg_size, double x, double y,
   return theta;
 }
 
+static double get_reg_union_theta( int * reg, int reg_size, double x, double y,
+                         struct rect * points, double reg_angle, double prec )
+{
+  double lambda,theta,weight;
+  double Ixx = 0.0;
+  double Iyy = 0.0;
+  double Ixy = 0.0;
+  int i;
+  if (reg_size == 1) {
+	  return points[reg[i]].theta;
+  }
+
+  /* check parameters */
+  if( reg == NULL ) error("get_reg_union_theta: invalid region.");
+  if( prec < 0.0 ) error("get_reg_union_theta: 'prec' must be positive.");
+
+  /* compute inertia matrix */
+  for(i=0; i<reg_size; i++)
+    {
+      weight = points[reg[i]].length;
+      Ixx += ( (double) points[reg[i]].y - y ) * ( (double) points[reg[i]].y - y ) * weight;
+      Iyy += ( (double) points[reg[i]].x - x ) * ( (double) points[reg[i]].x - x ) * weight;
+      Ixy -= ( (double) points[reg[i]].x - x ) * ( (double) points[reg[i]].y - y ) * weight;
+    }
+  if( double_equal(Ixx,0.0) && double_equal(Iyy,0.0) && double_equal(Ixy,0.0) )
+    error("get_reg_union_theta: null inertia matrix.");
+
+  /* compute smallest eigenvalue */
+  lambda = 0.5 * ( Ixx + Iyy - sqrt( (Ixx-Iyy)*(Ixx-Iyy) + 4.0*Ixy*Ixy ) );
+
+  /* compute angle */
+  theta = fabs(Ixx)>fabs(Iyy) ? atan2(lambda-Ixx,Ixy) : atan2(Ixy,lambda-Iyy);
+
+  /* The previous procedure doesn't cares about orientation,
+     so it could be wrong by 180 degrees. Here is corrected if necessary. */
+  if( angle_diff(theta,reg_angle) > prec ) theta += M_PI;
+
+  return theta;
+}
+
+
 /*----------------------------------------------------------------------------*/
 /** Computes a rectangle that covers a region of points.
  */
@@ -2094,7 +2135,9 @@ static void rects2rect( int * reg, int reg_size,
   double x,y,dx,dy,l,w,theta,weight,sum,l_min,l_max,w_min,w_max;
   int i;
 
-  /* check parameters */
+  if (reg_size == 1) {
+	  *rec = points[reg[i]];
+  }
 
   /* center of the region:
 
@@ -2115,10 +2158,11 @@ static void rects2rect( int * reg, int reg_size,
   y /= sum;
 
   /* theta */
-  //theta = get_theta(reg,reg_size,x,y,modgrad,reg_angle,prec);
+  theta = get_reg_union_theta(reg,reg_size,x,y,points,reg_angle,prec);
+  printf("theta: %lf (%lf)\n", theta, reg_angle);
   // FIXME!!!!
-  theta = reg_angle;
-
+  //theta = reg_angle;
+  
   /* length and width:
 
      'l' and 'w' are computed as the distance from the center of the
