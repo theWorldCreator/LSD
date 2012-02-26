@@ -8,7 +8,7 @@ To install it to your Python interpreter, type:
 Usage example:
 	from lsd import lsd
 	image = lsd(image_path = "data/1.pgm")
-Or with parametrs:
+Or with parameters:
 	image = lsd(scale = 0.8, sigma_coef = 0.6, quant = 2.0,
 				ang_th = 22.5, log_eps = 0, density_th = 0.7,
 				n_bins = 1024, image_path = "data/1.pgm")
