@@ -219,6 +219,10 @@ LSD_GRAD(LSD* self, PyObject *args, PyObject *keywds)
     double angle = self->angles->data[angle_ind];
     int modgrad_ind = (int) (y * self->modgrad->xsize) + (int) x;
     double modgrad = self->modgrad->data[modgrad_ind];
+    
+    if (angle == NOTDEF) {
+        return Py_BuildValue("[d,z]", modgrad, NULL);
+    }
 	return Py_BuildValue("[d,d]", modgrad, angle);
 }
 

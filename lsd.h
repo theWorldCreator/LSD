@@ -39,6 +39,10 @@ struct rect
   double p;            /* probability of a point with angle within 'prec' */
 };
 
+
+/** Label for pixels with undefined gradient. */
+#define NOTDEF -1024.0
+
 /** double image data type
 
     The pixel value at (x,y) is accessed by:

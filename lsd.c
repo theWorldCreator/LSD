@@ -99,8 +99,7 @@
 #define TRUE 1
 #endif /* !TRUE */
 
-/** Label for pixels with undefined gradient. */
-#define NOTDEF -1024.0
+
 
 /** 3/2 pi */
 #define M_3_2_PI 4.71238898038
