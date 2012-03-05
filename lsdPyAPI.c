@@ -12,6 +12,7 @@ typedef struct {
     PyObject_HEAD
     PyObject *regions;
     image_double angles;
+    image_double modgrad;
     double logNT;
     double prec;
     double p;
@@ -21,7 +22,8 @@ typedef struct {
 static void
 LSD_dealloc(LSD* self)
 {
-    free_obj_memory(&self->angles);
+	Py_XDECREF(self->regions);
+    free_obj_memory(&self->angles, &self->modgrad);
     self->ob_type->tp_free((PyObject*)self);
 }
 
@@ -39,6 +41,7 @@ LSD_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
             return NULL;
           }
         self->angles = NULL;
+        self->modgrad = NULL;
         self->logNT = -1;
         self->prec = -1;
         self->p = -1;
@@ -114,7 +117,7 @@ LSD_init(LSD *self, PyObject *args, PyObject *keywds)
 						   //is_assigned(arg,"reg") ? &region : NULL,
 						   NULL, // FIXME, what is it?
 						   &regX, &regY,
-						   &self->angles, &self->logNT,
+						   &self->angles, &self->modgrad, &self->logNT,
 						   &self->prec, &self->p);
 	
     
@@ -152,7 +155,7 @@ LSD_NFA(LSD* self, PyObject *args, PyObject *keywds)
                                      &rec.y2, &rec.width)) {
 		return NULL; 
 	}
-	// return to algorithm coordinate system
+	// Return to LSD algorithm coordinate system
 	if( self->scale != 1.0 )
 	  {
 		rec.x1 *= self->scale; rec.y1 *= self->scale;
@@ -181,9 +184,39 @@ LSD_NFA(LSD* self, PyObject *args, PyObject *keywds)
 	return Py_BuildValue("d", NFA);
 }
 
+static PyObject *
+LSD_GRAD(LSD* self, PyObject *args, PyObject *keywds)
+{
+	double x, y;
+	
+	static char *kwlist[] = {"x", "y", NULL};
+	if (!PyArg_ParseTupleAndKeywords(args, keywds, "dd", kwlist,
+                                     &x, &y)) {
+		return NULL; 
+	}
+	
+    // Return to LSD algorithm coordinate system
+	if( self->scale != 1.0 )
+	  {
+		x *= self->scale;
+		y *= self->scale;
+	  }
+	x -= 0.5;
+	y -= 0.5;
+    
+    int angle_ind = (int) (y * self->angles->xsize) + (int) x;
+    double angle = self->angles->data[angle_ind];
+    int modgrad_ind = (int) (y * self->modgrad->xsize) + (int) x;
+    double modgrad = self->modgrad->data[modgrad_ind];
+	return Py_BuildValue("[d,d]", modgrad, angle);
+}
+
 static PyMethodDef LSD_methods[] = {
     {"NFA", (PyCFunction)LSD_NFA, METH_VARARGS | METH_KEYWORDS,
      "Return -log10(NFA) value for specified region"
+    },
+    {"grad", (PyCFunction)LSD_GRAD, METH_VARARGS | METH_KEYWORDS,
+     "Return gradient vector (module, angle) in given point"
     },
     {NULL}  /* Sentinel */
 };

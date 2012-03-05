@@ -39,8 +39,20 @@ struct rect
   double p;            /* probability of a point with angle within 'prec' */
 };
 
-typedef struct image_double_s * image_double;
-void free_obj_memory(image_double *obj_angles);
+/** double image data type
+
+    The pixel value at (x,y) is accessed by:
+
+      image->data[ x + y * image->xsize ]
+
+    with x and y integer.
+ */
+typedef struct image_double_s
+{
+  double * data;
+  unsigned int xsize,ysize;
+} * image_double;
+void free_obj_memory(image_double *obj_angles, image_double *obj_modgrad);
 double rect_nfa(struct rect * rec, image_double angles, double logNT);
 
 /*----------------------------------------------------------------------------*/
@@ -148,8 +160,8 @@ double * LineSegmentDetection( int * n_out,
                                double ang_th, double log_eps, double density_th,
                                int n_bins,
                                int ** reg_img, int * reg_x, int * reg_y,
-                               image_double *obj_angles, double *obj_logNT,
-                               double *obj_prec, double *obj_p );
+                               image_double *obj_angles, image_double *obj_modgrad,
+                               double *obj_logNT, double *obj_prec, double *obj_p );
 
 /*----------------------------------------------------------------------------*/
 /** LSD Simple Interface with Scale and Region output.

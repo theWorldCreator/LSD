@@ -437,20 +437,6 @@ static image_int new_image_int_ini( unsigned int xsize, unsigned int ysize,
   return image;
 }
 
-/*----------------------------------------------------------------------------*/
-/** double image data type
-
-    The pixel value at (x,y) is accessed by:
-
-      image->data[ x + y * image->xsize ]
-
-    with x and y integer.
- */
-typedef struct image_double_s
-{
-  double * data;
-  unsigned int xsize,ysize;
-} * image_double;
 
 /*----------------------------------------------------------------------------*/
 /** Free memory used in image_double 'i'.
@@ -1981,9 +1967,11 @@ static int refine( struct point * reg, int * reg_size, image_double modgrad,
 }
 
 
-void free_obj_memory(image_double *obj_angles) {
+void free_obj_memory(image_double *obj_angles, image_double *obj_modgrad) {
 	free_image_double(*obj_angles);
+	free_image_double(*obj_modgrad);
 	*obj_angles = NULL;
+	*obj_modgrad = NULL;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -1999,8 +1987,8 @@ double * LineSegmentDetection( int * n_out,
                                double ang_th, double log_eps, double density_th,
                                int n_bins,
                                int ** reg_img, int * reg_x, int * reg_y,
-                               image_double *obj_angles, double *obj_logNT,
-                               double *obj_prec, double *obj_p )
+                               image_double *obj_angles, image_double *obj_modgrad,
+                               double *obj_logNT, double *obj_prec, double *obj_p )
 {
   image_double image;
   ntuple_list out = new_ntuple_list(7);
@@ -2068,8 +2056,9 @@ double * LineSegmentDetection( int * n_out,
           + log10(11.0);
   min_reg_size = (int) (-logNT/log10(p)); /* minimal number of points in region
                                              that can give a meaningful event */
-  if (obj_angles && obj_logNT && obj_prec && obj_p) {
+  if (obj_angles && obj_modgrad && obj_logNT && obj_prec && obj_p) {
     *obj_angles = angles;
+    *obj_modgrad = modgrad;
     *obj_logNT = logNT;
     *obj_prec = prec;
     *obj_p = p;
@@ -2152,7 +2141,6 @@ double * LineSegmentDetection( int * n_out,
                                the data pointer was provided to this functions
                                and should not be destroyed.                 */
   
-  free_image_double(modgrad);
   free_image_char(used);
   free( (void *) reg );
   free( (void *) mem_p );
@@ -2205,7 +2193,7 @@ double * lsd_scale_region( int * n_out,
 
   return LineSegmentDetection( n_out, img, X, Y, scale, sigma_scale, quant,
                                ang_th, log_eps, density_th, n_bins,
-                               reg_img, reg_x, reg_y, NULL, NULL, NULL, NULL );
+                               reg_img, reg_x, reg_y, NULL, NULL, NULL, NULL, NULL );
 }
 
 /*----------------------------------------------------------------------------*/
