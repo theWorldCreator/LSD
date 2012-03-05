@@ -204,6 +204,17 @@ LSD_GRAD(LSD* self, PyObject *args, PyObject *keywds)
 	x -= 0.5;
 	y -= 0.5;
     
+    if (x < 0 || y < 0) {
+        return NULL;
+    }
+    
+    if ((int) x > (int) self->angles->xsize || (int) y >= (int) self->angles->ysize) {
+        return NULL;
+    }
+    if ((int) x >= (int) self->modgrad->xsize || (int) y >= (int) self->modgrad->ysize) {
+        return NULL;
+    }
+    
     int angle_ind = (int) (y * self->angles->xsize) + (int) x;
     double angle = self->angles->data[angle_ind];
     int modgrad_ind = (int) (y * self->modgrad->xsize) + (int) x;
