@@ -68,13 +68,13 @@ LSD_init(LSD *self, PyObject *args, PyObject *keywds)
   char *image_path = NULL;
   
   
-  static char *kwlist[] = {"scale", "sigma_coef", "quant", 
+  static char *kwlist[] = {"image_path", "scale", "sigma_coef", "quant", 
 							  "ang_th", "log_eps", "density_th", 
-							  "n_bins", "image_path", NULL};
-  if (!PyArg_ParseTupleAndKeywords(args, keywds, "|ddddddis", kwlist,
-                                     &scale, &sigma_coef, &quant,
+							  "n_bins", NULL};
+  if (!PyArg_ParseTupleAndKeywords(args, keywds, "s|ddddddi", kwlist,
+                                     &image_path, &scale, &sigma_coef,
                                      &ang_th, &log_eps, &density_th,
-                                     &n_bins, &image_path)) {
+                                     &n_bins, &quant )) {
     return -1; 
   }
   if (scale < 0.0) {
