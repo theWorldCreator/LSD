@@ -30,3 +30,10 @@ Getting point gradient:
     answ = image.grad(x, y)
 answ[0] is the module of the gradient vector
 answ[1] is the angle. If gradient vector has too small module to be sure about angle, angle will be None.
+
+usage_example.py has awful code, but you still can see it and try LSD algorithm in work.
+Firstly example script will ask to choose PGM image file and open it. When left click will put gradient vector for clicked point in to terminal.
+Right click to add point: first two point are opposite sides of the rectangle and third is point on the long side. It is better to show, then to tell, so ty it.
+Middle mouse button click will erase rectangles from the image.
+
+Enjoy!
