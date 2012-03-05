@@ -29,4 +29,4 @@ answ is equal to -log10(NFA)
 Getting point gradient:
     answ = image.grad(x, y)
 answ[0] is the module of the gradient vector
-answ[1] is the angle
+answ[1] is the angle. If gradient vector has too small module to be sure about angle, angle will be None.
